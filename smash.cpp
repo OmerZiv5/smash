@@ -73,10 +73,10 @@ int main(int argc, char *argv[])
     act_z.sa_handler = &handler;
     // Setting up the control-C mask
     sigfillset(&act_c.sa_mask);
-    sigdedelset(&act_c.sa_mask, SIGINT);
+    sigdelset(&act_c.sa_mask, SIGINT);
     // Setting up the control-Z mask
     sigfillset(&act_z.sa_mask);
-    sigdedelset(&act_z.sa_mask, 20);
+    sigdelset(&act_z.sa_mask, 20);
     //NOTE: the signal handlers and the function/s that sets the handler should be found in siganls.c
     // Change the response for control + c
     if(sigaction(2, &act_c, nullptr) == -1){
