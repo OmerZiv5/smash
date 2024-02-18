@@ -17,40 +17,46 @@ List* jobs = nullptr;
 char lineSize[MAX_LINE_SIZE];
 
 /*************PASTE THE SIGNAL HANDLERS HERE******************************/
-void handler_cntlc(){
+void handler(int signum){
     if(jobs->fg_busy == false){
         // There is no external process in foreground
         return;
     }
-    std::cout << "smash: caught ctrl-C" << std::endl;
-    int kill_res = kill(jobs->fg_job.pid, SIGKILL);
-    if(kill_res != 0){
-        perror("smash error: kill failed\n");
+    if(signum == 2){
+        // Control-C
+        std::cout << "smash: caught ctrl-C" << std::endl;
+        int kill_res = kill(jobs->fg_job.pid, SIGKILL);
+        if(kill_res != 0){
+            perror("smash error: kill failed\n");
+        }
+        else{
+            std::cout << "smash: process " << jobs->fg_job.pid << " was killed" << std::endl;
+            jobs->fg_busy = false;
+        }
+    }
+    else if(signum == 20){
+        // Control-Z
+        std::cout << "smash: caught ctrl-Z" << std::endl;
+        int kill_res = kill(jobs->fg_job.pid, SIGSTOP);
+        if(kill_res != 0){
+            perror("smash error: kill failed\n");
+        }
+        else{
+            // Process was stopped manually
+            jobs->fg_job.mode = STOPPED;
+            jobs->Add_Job(jobs->fg_job);
+            std::cout << "smash: process " << jobs->fg_job.pid << " was stopped" << std::endl;
+            jobs->fg_busy = false;
+        }
     }
     else{
-        std::cout << "smash: process " << jobs->fg_job.pid << " was killed" << std::endl;
-        jobs->fg_busy = false;
+        // Unfamiliar signal
+        return;
     }
 }
 
-void handler_cntlz(){
-    if(jobs->fg_busy == false){
-        // There is no external process in foreground
-        return;
-    }
-    std::cout << "smash: caught ctrl-Z" << std::endl;
-    int kill_res = kill(jobs->fg_job.pid, SIGSTOP);
-    if(kill_res != 0){
-        perror("smash error: kill failed\n");
-    }
-    else{
-        // Process was stopped manually
-        jobs->fg_job.mode = STOPPED;
-        jobs->Add_Job(jobs->fg_job);
-        std::cout << "smash: process " << jobs->fg_job.pid << " was stopped" << std::endl;
-        jobs->fg_busy = false;
-    }
-}
+
+
 
 //**************************************************************************************
 // function name: main
@@ -61,11 +67,27 @@ int main(int argc, char *argv[])
     char cmdString[MAX_LINE_SIZE];
 
     //signal declaretions
+    struct sigaction act_c;
+    struct sigaction act_z;
+    act_c.sa_handler = &handler;
+    act_z.sa_handler = &handler;
+    // Setting up the control-C mask
+    sigfillset(&act_c.sa_mask);
+    sigdedelset(&act_c.sa_mask, SIGINT);
+    // Setting up the control-Z mask
+    sigfillset(&act_z.sa_mask);
+    sigdedelset(&act_z.sa_mask, 20);
     //NOTE: the signal handlers and the function/s that sets the handler should be found in siganls.c
     // Change the response for control + c
-    sigaction(2, handler_cntlc, nullptr);
+    if(sigaction(2, &act_c, nullptr) == -1){
+        perror("smash error: sigaction failed\n");
+        return -1;
+    }
     // Change the response for control + z
-    sigaction(20, handler_cntlz, nullptr);
+    if(sigaction(20, &act_z, nullptr) == -1){
+        perror("smash error: sigaction failed\n");
+        return -1;
+    }
 
     /************************************/
     //NOTE: the signal handlers and the function/s that sets the handler should be found in siganls.c
