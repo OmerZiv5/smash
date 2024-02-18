@@ -7,7 +7,7 @@
 #include <csignal>
 #include <cstdio>
 #include "commands.h"
-#include "signals.h"
+
 
 #define MAX_LINE_SIZE 80
 #define MAXARGS 20
