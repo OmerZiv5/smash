@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <vector>
+#include <algorithm>
+#include <fcntl.h>
 
 #define MAX_LINE_SIZE 80
 #define MAX_ARG 20
@@ -46,28 +48,15 @@ public:
     void Print_Job() {
         time_t diff_time = this->Seconds_Elapsed();
         if(this->mode == STOPPED){
-            std::cout << "[" << this->job_id << "] " << this->command << " : " << this->pid << " " << diff_time << " (stopped)" << std::endl;
+            std::cout << "[" << this->job_id << "] " << this->command << " : " << this->pid << " " << diff_time << " secs (stopped)" << std::endl;
         }
         else{
-            std::cout << "[" << this->job_id << "] " << this->command << " : " << this->pid << " " << diff_time << std::endl;
+            std::cout << "[" << this->job_id << "] " << this->command << " : " << this->pid << " " << diff_time << " secs" << std::endl;
         }
     }
 };
 
-bool Process_Exists(Job job){
-    if(job.mode == STOPPED){
-        return true;
-    }
-    int not_exists = kill(job.pid, 0);
-    if(!not_exists){
-        return true;
-    }
-    return false;
-}
 
-bool Compare_Job_Ids(const Job& job1, const Job& job2){
-    return job1.job_id < job2.job_id;
-}
 
 class List {
 public:
@@ -81,6 +70,10 @@ public:
 
     // Destructor
     ~List() {}
+
+    static bool Compare_Job_Ids(const Job& job1, const Job& job2){
+        return job1.job_id < job2.job_id;
+    }
 
     void Sort_List(){
         std::sort(jobs_list.begin(), jobs_list.end(), Compare_Job_Ids);
@@ -107,7 +100,7 @@ public:
         else {
             // New job has no job id
             if (new_job.job_id == 0) {
-                new_job.job_id = jobs_list.end()->job_id + 1;
+                new_job.job_id = (jobs_list.end() - 1)->job_id + 1;
                 jobs_list.push_back(new_job);
                 this->job_counter++;
                 return;
@@ -124,7 +117,7 @@ public:
 
     std::vector<Job>::iterator Search_Job(int job_id){
         std::vector<Job>::iterator it = jobs_list.begin();
-        for(Job job : jobs_list){
+        for(int i = 0; i < job_counter; i++){
             if(it->job_id == job_id){
                 return it;
             }
@@ -137,7 +130,18 @@ public:
     void Clean_List(){
         // Checks which jobs are terminated and takes them out of the list
         for(std::vector<Job>::iterator it = jobs_list.begin(); it != jobs_list.end(); ){
-            if(!Process_Exists(*it)){
+            bool process_exists;
+            if(it->mode == STOPPED){
+                process_exists = true;
+            }
+            int not_exists = kill(it->pid, 0);
+            if(!not_exists){
+                process_exists =  true;
+            }
+            else{
+                process_exists = false;
+            }
+            if(!process_exists){
                 int status;
                 waitpid(it->pid, &status, WUNTRACED);
                 jobs_list.erase(it);
@@ -151,8 +155,9 @@ public:
 
     void Print_List(){
         Clean_List();
-        for(Job job : jobs_list){
-            job.Print_Job();
+        std::vector<Job>::iterator it = jobs_list.begin();
+        for(int i = 0; i < job_counter; i++){
+            (it + i)->Print_Job();
         }
     }
 };
