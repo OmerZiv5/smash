@@ -2,7 +2,7 @@
 //********************************************
 #include "commands.h"
 //********************************************
-std::string prev_wd = "";
+char prev_wd[MAX_LINE_SIZE] = {};
 //********************************************
 // function name: ExeCmd
 // Description: interperts and executes built-in commands
@@ -21,14 +21,15 @@ bool is_number(const std::string& str){
 
 std::string get_file_path(std::string file_name){
     std::string file_path = "";
-    std::string curr_dir = "";
-    getcwd(curr_dir.c_str(), MAX_LINE_SIZE);
+    char curr_dir[MAX_LINE_SIZE] = {};
+    getcwd(curr_dir, MAX_LINE_SIZE);
     // Checking validity of the directory
-    if(curr_dir.empty()){
+    if(curr_dir[0] == '\0'){
         perror("smash error: getcwd failed\n");
     }
     else{
-        file_path = curr_dir + "/" + file_name;
+        std::string curr_dir_str(curr_dir);
+        file_path = curr_dir_str + "/" + file_name;
     }
     return file_path;
 }
@@ -37,8 +38,7 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
 {
     char* cmd;
     char* args[MAX_ARG];
-    char pwd[MAX_LINE_SIZE];
-    char* delimiters = " \t\n";
+    const char* delimiters = " \t\n";
     int i = 0, num_arg = 0;
     bool illegal_cmd = FALSE; // illegal command
     cmd = strtok(lineSize, delimiters);
@@ -60,40 +60,43 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
     if (!strcmp(cmd, "cd") )
     {
         int ret_val;
-        std::string curr_wd = "";
+        char curr_wd[MAX_LINE_SIZE] = {};
         //Making sure the number of arguments is correct
         if(num_arg != 1){
             perror("smash error: cd: too many arguments\n");
         }
         else if(!strcmp(args[1], "-")){
             // There is no previous working directory
-            if(prev_wd.empty()){
+            if(prev_wd[0] == '\0'){
                 perror("smash error: cd: OLDPWD not set\n");
             }
             else{
-                getcwd(curr_wd.c_str(), MAX_LINE_SIZE);
+                getcwd(curr_wd, MAX_LINE_SIZE);
                 // Checking validity of the directory
-                if(curr_wd.empty()){
+                if(curr_wd[0] == '\0'){
                     perror("smash error: getcwd failed\n");
                 }
                 else {
-                    ret_val = chdir(prev_wd.c_str());
+                    ret_val = chdir(prev_wd);
                     // Changing working directory failed
                     if (ret_val != 0) {
                         perror("smash error: chdir failed\n");
                     }
                     else {
                         // Setting the prev_wd to the directory we switched from
-                        prev_wd = curr_wd;
+                        for(int i = 0; i < MAX_LINE_SIZE; i++){
+                            prev_wd[i] = '\0';
+                        }
+                        strcpy(prev_wd, curr_wd);
                     }
                 }
             }
         }
         // Argument is not "-" (it's a path)
         else{
-            getcwd(curr_wd.c_str(), MAX_LINE_SIZE);
+            getcwd(curr_wd, MAX_LINE_SIZE);
             // Checking validity of the directory
-            if(curr_wd.empty()){
+            if(curr_wd[0] == '\0'){
                 perror("smash error: getcwd failed\n");
             }
             else {
@@ -103,7 +106,10 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
                 }
                 else {
                     // Setting the prev_wd to the directory we switched from
-                    prev_wd = curr_wd;
+                    for(int i = 0; i < MAX_LINE_SIZE; i++){
+                        prev_wd[i] = '\0';
+                    }
+                    strcpy(prev_wd, curr_wd);
                 }
             }
         }
@@ -111,10 +117,10 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
         /*************************************************/
     else if (!strcmp(cmd, "pwd"))
     {
-        std::string curr_wd = "";
-        getcwd(curr_wd.c_str(), MAX_LINE_SIZE);
+        char curr_wd[MAX_LINE_SIZE] = {};
+        getcwd(curr_wd, MAX_LINE_SIZE);
         // Checking validity of the directory
-        if(curr_wd.empty()){
+        if(curr_wd[0] == '\0'){
             perror("smash error: getcwd failed\n");
         }
         else{
@@ -158,6 +164,7 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
                     jobs->jobs_list.back().mode = BACKGROUND;
                     jobs->fg_job = jobs->jobs_list.back();
                     jobs->jobs_list.pop_back();
+                    jobs->job_counter--;
                     jobs->fg_busy = true;
                     int job_status;
                     int wait_res = waitpid(jobs->fg_job.pid, &job_status, WUNTRACED);
@@ -182,16 +189,17 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
                 }
                 // Job found in the list
                 else{
-                    std::cout << jobs->jobs_list.back().command << " : " << jobs->jobs_list.back().pid << std::endl;
-                    int sig_res = kill(jobs->jobs_list.back().pid, SIGCONT);
+                    std::cout << it->command << " : " << it->pid << std::endl;
+                    int sig_res = kill(it->pid, SIGCONT);
                     if(sig_res != 0){
                         perror("smash error: kill failed\n");
                     }
                     // SIGCONT success
                     else{
-                        jobs->jobs_list.back().mode = BACKGROUND;
-                        jobs->fg_job = jobs->jobs_list.back();
-                        jobs->jobs_list.pop_back();
+                        it->mode = BACKGROUND;
+                        jobs->fg_job = *it;
+                        jobs->jobs_list.erase(it);
+                        jobs->job_counter--;
                         jobs->fg_busy = true;
                         int job_status;
                         int wait_res = waitpid(jobs->fg_job.pid, &job_status, WUNTRACED);
@@ -286,7 +294,16 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
                         time_t end_time;
                         time(&end_time);
                         time_t kill_time = difftime(begin_time, end_time);
-                        if(Process_Exists(job)){
+                        bool process_exists;
+                        if(job.mode == STOPPED){
+                            process_exists = true;
+                        }
+                        int not_exists = kill(job.pid, 0);
+                        if(!not_exists){
+                            process_exists =  true;
+                        }
+                        process_exists = false;
+                        if(process_exists){
                             if(kill_time > 5){
                                 int sigkill_res = kill(job.pid, SIGKILL);
                                 if(sigkill_res != 0){
@@ -369,12 +386,14 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
         else{
             // Valid amount of arguments
             // Get the file paths
-            std::string file_name1 = args[1];
-            std::string file_name2  = args[2];
-            const char* file_path1 = get_file_path(file_name1).c_str();
-            const char* file_path2 = get_file_path(file_name2).c_str();
+            std::string file_name1(args[1]);
+            std::string file_name2(args[2]);
+            char file_path1[MAX_LINE_SIZE];
+            strcpy(file_path1, get_file_path(file_name1).c_str());
+            char file_path2[MAX_LINE_SIZE];
+            strcpy(file_path2, get_file_path(file_name2).c_str());
 
-            int flags;
+            int flags = 0;
             int fp1 = open(file_path1, flags, "r");
             int fp2 = open(file_path2, flags, "r");
 
@@ -398,18 +417,18 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
                 }
             }
             else{
-                char *buf1;
-                char *buf2;
+                char buf1;
+                char buf2;
                 // fopen succeeded
                 while(1){
-                    int read1 = read(fp1, buf1, 1);
-                    int read2 = read(fp2, buf2, 1);
+                    int read1 = read(fp1, &buf1, 1);
+                    int read2 = read(fp2, &buf2, 1);
                     if(read1 == -1 || read2 == -1){
                         perror("smash error: read failed\n");
                         break;
                     }
                     // read not failed
-                    if(read1 != read2 || strcmp(buf1, buf2)){
+                    if(read1 != read2 || buf1 != buf2){
                         std::cout << "1" << std::endl;
                         break;
                     }
@@ -421,7 +440,7 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
                 }
                 int res_close1 = close(fp1);
                 int res_close2 = close(fp2);
-                if(res_close1 != -1 || res_close2 != -1){
+                if(res_close1 == -1 || res_close2 == -1){
                     perror("smash error: close failed\n");
                     return -1;
                 }
@@ -449,57 +468,55 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
 //**************************************************************************************
 void ExeExternal(char *args[MAX_ARG], char* cmdString, int num_arg, List* jobs)
 {
-    int pID;
     std::string child_command = cmdString;
-    switch(pID = fork())
-    {
-        case -1:
-            // Case of an error in the fork
-            perror("smash error: fork failed\n");
+    int pID = fork();
+    if(pID == -1) {
+        // Case of an error in the fork
+        perror("smash error: fork failed\n");
+        return;
+    }
+    else if(pID == 0) {
+        // Child Process
+        setpgrp();
+        char curr_wd[MAX_LINE_SIZE] = {};
+        getcwd(curr_wd, MAX_LINE_SIZE);
+        // Checking validity of the directory
+        if (curr_wd[0] == '\0'){
+            perror("smash error: getcwd failed\n");
+        } else {
+            std::string prog_name = args[0];
+            std::string curr_wd_str(curr_wd);
+            std::string path_name = curr_wd_str + "/" + prog_name;
+            const char *full_path_name = path_name.c_str();
+            execv(full_path_name, args);
+            perror("smash error: execv failed\n");
+            exit(-1);
+        }
+        return;
+    }
+    else {
+        // Dad process
+        // Creating a child job
+        Job child;
+        child.pid = pID;
+        child.command = child_command;
 
-        case 0 :
-            // Child Process
-            setpgrp();
-
-            std::string curr_wd = "";
-            getcwd(curr_wd.c_str(), MAX_LINE_SIZE);
-            // Checking validity of the directory
-            if(curr_wd.empty()){
-                perror("smash error: getcwd failed\n");
+        if (std::strcmp(args[num_arg - 1], "&")) {
+            // Child running in foreground
+            jobs->fg_job = child;
+            jobs->fg_busy = true;
+            int child_status;
+            int wait_res = waitpid(child.pid, &child_status, WUNTRACED);
+            if (wait_res == -1) {
+                // Child process ended abnormally
+                perror("smash error: waitpid failed\n");
+                jobs->fg_busy = false;
             }
-            else{
-                std::string prog_name = args[0];
-                std::string path_name = curr_wd + "/" + prog_name;
-                const char *full_path_name = path_name.c_str();
-                execv(full_path_name, args);
-                perror("smash error: execv failed\n");
-                exit(-1);
-            }
-
-
-        default:
-            // Dad process
-            // Creating a child job
-
-            Job child;
-            child.pid = pID;
-            child.command = child_command;
-
-            if(std::strcmp(args[num_arg - 1], "&")){
-                // Child running in foreground
-                jobs->fg_job = child;
-                jobs->fg_busy = true;
-                int child_status;
-                int wait_res = waitpid(child.pid, &child_status, WUNTRACED);
-                if(wait_res == -1){
-                    // Child process ended abnormally
-                    perror("smash error: waitpid failed\n");
-                    jobs->fg_busy = false;
-                }
-            }
-            else{
-                // Child running in background
-                jobs->Add_Job(child);
-            }
+        } else {
+            // Child running in background
+            jobs->Add_Job(child);
+        }
+        return;
     }
 }
+
