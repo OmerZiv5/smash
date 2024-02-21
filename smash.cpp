@@ -44,7 +44,9 @@ void handler(int signum){
         else{
             // Process was stopped manually
             jobs->fg_job.mode = STOPPED;
+            jobs->fg_job.Print_Job();
             jobs->Add_Job(jobs->fg_job);
+            jobs->fg_job.Print_Job();
             std::cout << "smash: process " << jobs->fg_job.pid << " was stopped" << std::endl;
             jobs->fg_busy = false;
         }
