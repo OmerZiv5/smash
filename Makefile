@@ -13,4 +13,3 @@ smash.o: smash.cpp commands.h
 # Cleaning old files before new make
 clean:
 	$(RM) $(TARGET) *.o *~ "#"* core.* smash
-
