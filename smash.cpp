@@ -13,10 +13,12 @@
 #define MAXARGS 20
 
 char* L_Fg_Cmd;
-List* jobs = nullptr;
 char lineSize[MAX_LINE_SIZE];
+// Initializing pointer to job management class
+List* jobs = nullptr;
 
 /*************PASTE THE SIGNAL HANDLERS HERE******************************/
+extern "C"{
 void handler(int signum){
     if(jobs->fg_busy == false){
         // There is no external process in foreground
@@ -24,19 +26,19 @@ void handler(int signum){
     }
     if(signum == 2){
         // Control-C
-        std::cout << "smash: caught ctrl-C" << std::endl;
+        printf("smash: caught ctrl-C\n");
         int kill_res = kill(jobs->fg_job.pid, SIGKILL);
         if(kill_res != 0){
             perror("smash error: kill failed\n");
         }
         else{
-            std::cout << "smash: process " << jobs->fg_job.pid << " was killed" << std::endl;
+            printf("smash: process %d was killed\n", jobs->fg_job.pid);
             jobs->fg_busy = false;
         }
     }
     else if(signum == 20){
         // Control-Z
-        std::cout << "smash: caught ctrl-Z" << std::endl;
+        printf("smash: caught ctrl-Z\n");
         int kill_res = kill(jobs->fg_job.pid, SIGSTOP);
         if(kill_res != 0){
             perror("smash error: kill failed\n");
@@ -47,7 +49,7 @@ void handler(int signum){
             jobs->fg_job.Print_Job();
             jobs->Add_Job(jobs->fg_job);
             jobs->fg_job.Print_Job();
-            std::cout << "smash: process " << jobs->fg_job.pid << " was stopped" << std::endl;
+            printf("smash: process %d was stopped\n", jobs->fg_job.pid);
             jobs->fg_busy = false;
         }
     }
@@ -55,6 +57,7 @@ void handler(int signum){
         // Unfamiliar signal
         return;
     }
+}
 }
 
 
@@ -126,6 +129,3 @@ int main(int argc, char *argv[])
     }
     return 0;
 }
-
-
-
