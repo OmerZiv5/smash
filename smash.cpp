@@ -46,9 +46,7 @@ void handler(int signum){
         else{
             // Process was stopped manually
             jobs->fg_job.mode = STOPPED;
-            jobs->fg_job.Print_Job();
             jobs->Add_Job(jobs->fg_job);
-            jobs->fg_job.Print_Job();
             printf("smash: process %d was stopped\n", jobs->fg_job.pid);
             jobs->fg_busy = false;
         }
