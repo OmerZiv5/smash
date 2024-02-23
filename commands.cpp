@@ -515,6 +515,11 @@ void ExeExternal(char *args[MAX_ARG], char* cmdString, int num_arg, List* jobs)
         } else {
             // Child running in background
             jobs->Add_Job(child);
+            int child_status;
+            if(waitpid(child.pid, &child_status, WNOHANG) == -1){
+                // Child process ended abnormally
+                perror("smash error: waitpid failed\n");
+            }
         }
         return;
     }
