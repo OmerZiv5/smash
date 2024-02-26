@@ -1,4 +1,5 @@
 //		commands.cpp
+// Updated 
 //********************************************
 #include "commands.h"
 //********************************************
@@ -469,6 +470,11 @@ int ExeCmd(List* jobs, char* lineSize, char* cmdString)
 void ExeExternal(char *args[MAX_ARG], char* cmdString, int num_arg, List* jobs)
 {
     std::string child_command = cmdString;
+    bool backg = false;
+    if (!std::strcmp(args[num_arg], "&")) {
+        backg = true;
+	args[num_arg] = NULL;
+    }
     int pID = fork();
     if(pID == -1) {
         // Case of an error in the fork
@@ -485,9 +491,7 @@ void ExeExternal(char *args[MAX_ARG], char* cmdString, int num_arg, List* jobs)
             perror("smash error: getcwd failed\n");
         } else {
             std::string prog_name = args[0];
-            std::string curr_wd_str(curr_wd);
-            std::string path_name = curr_wd_str + "/" + prog_name;
-            const char *full_path_name = path_name.c_str();
+            const char *full_path_name = prog_name.c_str();
             execv(full_path_name, args);
             perror("smash error: execv failed\n");
             exit(-1);
@@ -501,7 +505,7 @@ void ExeExternal(char *args[MAX_ARG], char* cmdString, int num_arg, List* jobs)
         child.pid = pID;
         child.command = child_command;
 
-        if (std::strcmp(args[num_arg - 1], "&")) {
+        if (!backg) {
             // Child running in foreground
             jobs->fg_job = child;
             jobs->fg_busy = true;
@@ -510,8 +514,9 @@ void ExeExternal(char *args[MAX_ARG], char* cmdString, int num_arg, List* jobs)
             if (wait_res == -1) {
                 // Child process ended abnormally
                 perror("smash error: waitpid failed\n");
-                jobs->fg_busy = false;
             }
+
+           jobs->fg_busy = false;
         } else {
             // Child running in background
             jobs->Add_Job(child);
