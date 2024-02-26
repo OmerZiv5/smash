@@ -19,6 +19,7 @@
 #define STOPPED 0
 #define BACKGROUND 1
 
+// Updated
 
 class Job{
 public:
@@ -127,31 +128,32 @@ public:
         return jobs_list.end();
     }
 
-    void Clean_List(){
+    void Clean_List() {
         // Checks which jobs are terminated and takes them out of the list
-        for(std::vector<Job>::iterator it = jobs_list.begin(); it != jobs_list.end(); ){
-            bool process_exists;
-            if(it->mode == STOPPED){
-                process_exists = true;
+        for(std::vector<Job>::iterator it = jobs_list.begin(); it != jobs_list.end(); ) {
+            int status;
+            int result = waitpid(it->pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+            if(result == -1) {
+                // Handle waitpid error
+                perror("smash error: waitpid failed\n");
+                it++;
             }
-            int not_exists = kill(it->pid, 0);
-            if(!not_exists){
-                process_exists =  true;
-            }
-            else{
-                process_exists = false;
-            }
-            if(!process_exists){
-                int status;
-                waitpid(it->pid, &status, WUNTRACED);
-                jobs_list.erase(it);
+            else if(!result){it++;} // Job is alive
+
+            else if(WIFSTOPPED(status) || WIFCONTINUED(status)){it++;} // Job stopped or running in background after stopped
+
+            else if(WIFEXITED(status) || result > 0) {
+                // Process has finished or terminated by a signal
+                it = jobs_list.erase(it);
                 job_counter--;
             }
-            else{
+            else {
+                // Process is running
                 it++;
             }
         }
     }
+
 
     void Print_List(){
         Clean_List();
