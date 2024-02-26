@@ -8,6 +8,7 @@
 #include <cstdio>
 #include "commands.h"
 
+// Updated
 
 #define MAX_LINE_SIZE 80
 #define MAXARGS 20
@@ -24,6 +25,7 @@ void handler(int signum){
         // There is no external process in foreground
         return;
     }
+    
     if(signum == 2){
         // Control-C
         printf("smash: caught ctrl-C\n");
@@ -70,16 +72,16 @@ int main(int argc, char *argv[])
     char cmdString[MAX_LINE_SIZE];
 
     //signal declaretions
-    struct sigaction act_c;
-    struct sigaction act_z;
+    struct sigaction act_c = {0};
+    struct sigaction act_z = {0};
     act_c.sa_handler = &handler;
     act_z.sa_handler = &handler;
+    act_c.sa_flags = SA_RESTART;
+    act_z.sa_flags = SA_RESTART;
     // Setting up the control-C mask
     sigfillset(&act_c.sa_mask);
-    sigdelset(&act_c.sa_mask, SIGINT);
     // Setting up the control-Z mask
     sigfillset(&act_z.sa_mask);
-    sigdelset(&act_z.sa_mask, 20);
     //NOTE: the signal handlers and the function/s that sets the handler should be found in siganls.c
     // Change the response for control + c
     if(sigaction(2, &act_c, nullptr) == -1){
